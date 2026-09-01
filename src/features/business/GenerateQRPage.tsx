@@ -1,7 +1,16 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMyBusiness, useGenerateQr } from "../../api/useBusinessApi";
 import { apiErrorMessage } from "../../api/client";
+import { getSocket } from "../../api/socket";
 import { Button, Input } from "../../components/ui";
+
+interface StampEarnedEvent {
+  branchId: string;
+  customerName: string;
+  currentStamps: number;
+  stampsRequired: number;
+  rewardUnlocked: boolean;
+}
 
 export function GenerateQRPage() {
   const { data: businessData } = useMyBusiness();
@@ -10,9 +19,33 @@ export function GenerateQRPage() {
   const [amountPaid, setAmountPaid] = useState("");
   const [error, setError] = useState("");
   const [secondsLeft, setSecondsLeft] = useState<number | null>(null);
+  const [liveEvent, setLiveEvent] = useState<StampEarnedEvent | null>(null);
 
   const branches = businessData?.branches || [];
   const activeBranchId = branchId || branches[0]?._id;
+
+  // Live "customer scanned!" confirmation — the QR is single-use, so once a
+  // scan lands for this branch we clear it and prompt staff to generate the
+  // next one instead of leaving a dead QR on screen.
+  useEffect(() => {
+    if (!activeBranchId) return;
+    const socket = getSocket();
+    socket.emit("join:branch", activeBranchId);
+
+    function onStampEarned(event: StampEarnedEvent) {
+      if (event.branchId !== activeBranchId) return;
+      setLiveEvent(event);
+      setSecondsLeft(null);
+      generateQr.reset();
+      setTimeout(() => setLiveEvent(null), 6000);
+    }
+
+    socket.on("stamp:earned", onStampEarned);
+    return () => {
+      socket.off("stamp:earned", onStampEarned);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeBranchId]);
 
   async function handleGenerate() {
     setError("");
@@ -44,6 +77,19 @@ export function GenerateQRPage() {
   return (
     <div className="flex flex-col items-center">
       <h1 className="mb-4 self-start text-xl font-bold text-thappa-navy">Generate Stamp QR</h1>
+
+      {liveEvent && (
+        <div className="mb-6 w-full max-w-sm rounded-xl border border-green-200 bg-green-50 p-4 text-center">
+          <p className="font-semibold text-green-800">
+            🎉 {liveEvent.customerName} just scanned!
+          </p>
+          <p className="mt-1 text-sm text-green-700">
+            {liveEvent.rewardUnlocked
+              ? "Reward unlocked — ask them for their 6-digit code."
+              : `Stamp ${liveEvent.currentStamps} / ${liveEvent.stampsRequired}`}
+          </p>
+        </div>
+      )}
 
       <div className="mb-6 flex w-full max-w-sm flex-col gap-3">
         {branches.length > 1 && (
