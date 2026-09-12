@@ -3,6 +3,7 @@ import { useAuth } from "../auth/AuthContext";
 
 const links = [
   { to: "/admin/businesses", label: "Businesses" },
+  { to: "/admin/campaigns", label: "Campaigns" },
   { to: "/admin/overview", label: "Platform Overview" },
 ];
 

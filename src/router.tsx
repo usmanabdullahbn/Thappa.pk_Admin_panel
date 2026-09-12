@@ -5,6 +5,7 @@ import { AdminLayout } from "./layouts/AdminLayout";
 import { BusinessLayout } from "./layouts/BusinessLayout";
 import { BusinessesListPage } from "./features/admin/BusinessesListPage";
 import { PlatformOverviewPage } from "./features/admin/PlatformOverviewPage";
+import { CampaignsPage } from "./features/admin/CampaignsPage";
 import { DashboardHomePage } from "./features/business/DashboardHomePage";
 import { GenerateQRPage } from "./features/business/GenerateQRPage";
 import { CustomersPage } from "./features/business/CustomersPage";
@@ -24,6 +25,7 @@ export const router = createBrowserRouter([
     children: [
       { index: true, element: <Navigate to="businesses" replace /> },
       { path: "businesses", element: <BusinessesListPage /> },
+      { path: "campaigns", element: <CampaignsPage /> },
       { path: "overview", element: <PlatformOverviewPage /> },
     ],
   },

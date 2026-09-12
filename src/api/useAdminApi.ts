@@ -22,6 +22,57 @@ export function useBusinessDetail(id?: string) {
   });
 }
 
+/** Active businesses for pickers (e.g. choosing the cafe for a new campaign). */
+export function useActiveBusinesses() {
+  return useQuery({
+    queryKey: ["admin", "businesses", "active-options"],
+    queryFn: async () => {
+      const { data } = await apiClient.get("/admin/businesses?status=ACTIVE&limit=100");
+      return data.data as { _id: string; name: string; category: string }[];
+    },
+  });
+}
+
+export function useCampaigns() {
+  return useQuery({
+    queryKey: ["admin", "campaigns"],
+    queryFn: async () => {
+      const { data } = await apiClient.get("/admin/campaigns");
+      return data as { data: any[] };
+    },
+  });
+}
+
+export interface CreateCampaignPayload {
+  businessId: string;
+  headline: string;
+  description: string;
+  stampsRequired: number;
+  rewardDescription: string;
+}
+
+export function useCreateCampaign() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: CreateCampaignPayload) => {
+      const { data } = await apiClient.post("/admin/campaigns", payload);
+      return data;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "campaigns"] }),
+  });
+}
+
+export function useUpdateCampaignStatus() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, isActive }: { id: string; isActive: boolean }) => {
+      const { data } = await apiClient.patch(`/admin/campaigns/${id}/status`, { isActive });
+      return data;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "campaigns"] }),
+  });
+}
+
 export function usePlatformOverview() {
   return useQuery({
     queryKey: ["admin", "overview"],
