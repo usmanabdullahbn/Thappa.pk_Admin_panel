@@ -1,59 +1,61 @@
-import React, { createContext, useContext, useEffect, useState, ReactNode } from "react";
+import { createContext, useContext, useEffect, useState, ReactNode } from "react";
+import {
+  AuthUser,
+  PortalRole,
+  clearSession,
+  isPortalRole,
+  migrateLegacySession,
+  readSession,
+  writeSession,
+} from "./sessionStore";
 
-export type Role = "ADMIN" | "BUSINESS" | "CUSTOMER";
+export type { AuthUser, PortalRole, Role } from "./sessionStore";
 
-export interface AuthUser {
-  id: string;
-  role: Role;
-  name: string;
-  email?: string;
-  businessId?: string;
-}
+type Sessions = Record<PortalRole, AuthUser | null>;
 
 interface AuthContextValue {
-  user: AuthUser | null;
+  /** The signed-in user for each portal; admin and business logins are independent. */
+  sessions: Sessions;
   loading: boolean;
   login: (user: AuthUser, accessToken: string, refreshToken: string) => void;
-  logout: () => void;
+  logout: (role: PortalRole) => void;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
-const USER_KEY = "thappa_user";
-const ACCESS_KEY = "thappa_access_token";
-const REFRESH_KEY = "thappa_refresh_token";
+function loadSessions(): Sessions {
+  return { ADMIN: readSession("ADMIN")?.user ?? null, BUSINESS: readSession("BUSINESS")?.user ?? null };
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<AuthUser | null>(null);
+  const [sessions, setSessions] = useState<Sessions>({ ADMIN: null, BUSINESS: null });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const stored = localStorage.getItem(USER_KEY);
-    if (stored) {
-      try {
-        setUser(JSON.parse(stored));
-      } catch {
-        localStorage.removeItem(USER_KEY);
-      }
-    }
+    migrateLegacySession();
+    setSessions(loadSessions());
     setLoading(false);
+
+    // Keep every open tab in step when another tab signs in or out.
+    function onStorage(event: StorageEvent) {
+      if (event.key === null || event.key.startsWith("thappa_session_")) setSessions(loadSessions());
+    }
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
   }, []);
 
   function login(newUser: AuthUser, accessToken: string, refreshToken: string) {
-    localStorage.setItem(USER_KEY, JSON.stringify(newUser));
-    localStorage.setItem(ACCESS_KEY, accessToken);
-    localStorage.setItem(REFRESH_KEY, refreshToken);
-    setUser(newUser);
+    if (!isPortalRole(newUser.role)) return;
+    writeSession({ user: newUser, accessToken, refreshToken });
+    setSessions(loadSessions());
   }
 
-  function logout() {
-    localStorage.removeItem(USER_KEY);
-    localStorage.removeItem(ACCESS_KEY);
-    localStorage.removeItem(REFRESH_KEY);
-    setUser(null);
+  function logout(role: PortalRole) {
+    clearSession(role);
+    setSessions(loadSessions());
   }
 
-  return <AuthContext.Provider value={{ user, loading, login, logout }}>{children}</AuthContext.Provider>;
+  return <AuthContext.Provider value={{ sessions, loading, login, logout }}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth() {

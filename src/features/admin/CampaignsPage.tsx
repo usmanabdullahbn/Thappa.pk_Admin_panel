@@ -1,10 +1,40 @@
 import { useState } from "react";
-import { useActiveBusinesses, useCampaigns, useCreateCampaign, useUpdateCampaignStatus } from "../../api/useAdminApi";
+import {
+  useActiveBusinesses,
+  useCampaigns,
+  useCreateCampaign,
+  useUpdateCampaignExpiry,
+  useUpdateCampaignStatus,
+} from "../../api/useAdminApi";
 import { apiErrorMessage } from "../../api/client";
 import { Table } from "../../components/Table";
 import { Button, Input } from "../../components/ui";
 
+function isExpired(campaign: any) {
+  return !!campaign.expiresAt && new Date(campaign.expiresAt).getTime() <= Date.now();
+}
+
+function formatDate(value?: string) {
+  return value ? new Date(value).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }) : "—";
+}
+
+/** A date as YYYY-MM-DD in the admin's local timezone, for date pickers. */
+function dateInputValue(date = new Date()) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+/** Campaigns run through the end of the chosen day in the admin's local time. */
+function endOfLocalDay(dateInput: string) {
+  return new Date(`${dateInput}T23:59:59.999`);
+}
+
 function CampaignStatus({ campaign }: { campaign: any }) {
+  if (!campaign.expiresAt) {
+    return <span className="rounded-full bg-orange-100 px-2 py-0.5 text-xs font-medium text-orange-700">No expiry set (hidden from app)</span>;
+  }
+  if (isExpired(campaign)) {
+    return <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">Expired</span>;
+  }
   if (campaign.businessId?.status && campaign.businessId.status !== "ACTIVE") {
     return <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">Hidden (business {campaign.businessId.status.toLowerCase()})</span>;
   }
@@ -17,6 +47,7 @@ function CampaignStatus({ campaign }: { campaign: any }) {
 
 export function CampaignsPage() {
   const [showModal, setShowModal] = useState(false);
+  const [expiryCampaign, setExpiryCampaign] = useState<any>(null);
   const { data, isLoading } = useCampaigns();
   const updateStatus = useUpdateCampaignStatus();
 
@@ -50,17 +81,25 @@ export function CampaignsPage() {
             },
             { header: "Stamps", render: (c: any) => c.stampsRequired },
             { header: "Reward", render: (c: any) => c.rewardDescription },
+            { header: "Expires", render: (c: any) => formatDate(c.expiresAt) },
             { header: "Status", render: (c: any) => <CampaignStatus campaign={c} /> },
             {
               header: "Actions",
               render: (c: any) => (
-                <button
-                  className={`text-xs hover:underline ${c.isActive ? "text-red-600" : "text-green-600"}`}
-                  disabled={updateStatus.isPending}
-                  onClick={() => updateStatus.mutate({ id: c._id, isActive: !c.isActive })}
-                >
-                  {c.isActive ? "Pause" : "Resume"}
-                </button>
+                <div className="flex gap-3">
+                  {c.expiresAt && !isExpired(c) && (
+                    <button
+                      className={`text-xs hover:underline ${c.isActive ? "text-red-600" : "text-green-600"}`}
+                      disabled={updateStatus.isPending}
+                      onClick={() => updateStatus.mutate({ id: c._id, isActive: !c.isActive })}
+                    >
+                      {c.isActive ? "Pause" : "Resume"}
+                    </button>
+                  )}
+                  <button className="text-xs text-thappa-navy hover:underline" onClick={() => setExpiryCampaign(c)}>
+                    {!c.expiresAt ? "Set expiry" : isExpired(c) ? "Extend" : "Change expiry"}
+                  </button>
+                </div>
               ),
             },
           ]}
@@ -69,6 +108,7 @@ export function CampaignsPage() {
       )}
 
       {showModal && <CreateCampaignModal onClose={() => setShowModal(false)} />}
+      {expiryCampaign && <ExpiryModal campaign={expiryCampaign} onClose={() => setExpiryCampaign(null)} />}
     </div>
   );
 }
@@ -86,6 +126,7 @@ function CreateCampaignModal({ onClose }: { onClose: () => void }) {
     description: "",
     stampsRequired: "5",
     rewardDescription: "",
+    expiresOn: "",
   });
   const [error, setError] = useState("");
 
@@ -99,8 +140,21 @@ function CreateCampaignModal({ onClose }: { onClose: () => void }) {
       return;
     }
 
+    const expiresAt = endOfLocalDay(form.expiresOn);
+    if (Number.isNaN(expiresAt.getTime()) || expiresAt.getTime() <= Date.now()) {
+      setError("Choose an expiry date of today or later.");
+      return;
+    }
+
     try {
-      await createCampaign.mutateAsync({ ...form, stampsRequired });
+      await createCampaign.mutateAsync({
+        businessId: form.businessId,
+        headline: form.headline,
+        description: form.description,
+        rewardDescription: form.rewardDescription,
+        stampsRequired,
+        expiresAt: expiresAt.toISOString(),
+      });
       onClose();
     } catch (err) {
       setError(apiErrorMessage(err));
@@ -184,6 +238,20 @@ function CreateCampaignModal({ onClose }: { onClose: () => void }) {
             </label>
           </div>
 
+          <label className={labelClass}>
+            Expiry date
+            <Input
+              type="date"
+              required
+              min={dateInputValue()}
+              value={form.expiresOn}
+              onChange={(e) => setForm({ ...form, expiresOn: e.target.value })}
+            />
+            <span className="text-xs font-normal text-gray-500">
+              The campaign ends at the end of this day and is removed from the mobile app.
+            </span>
+          </label>
+
           {error && <p className="text-sm text-red-600">{error}</p>}
 
           <div className="mt-2 flex justify-end gap-2">
@@ -192,6 +260,63 @@ function CreateCampaignModal({ onClose }: { onClose: () => void }) {
             </button>
             <Button type="submit" disabled={createCampaign.isPending}>
               {createCampaign.isPending ? "Creating…" : "Create Campaign"}
+            </Button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function ExpiryModal({ campaign, onClose }: { campaign: any; onClose: () => void }) {
+  const updateExpiry = useUpdateCampaignExpiry();
+  const [expiresOn, setExpiresOn] = useState(
+    campaign.expiresAt && !isExpired(campaign) ? dateInputValue(new Date(campaign.expiresAt)) : ""
+  );
+  const [error, setError] = useState("");
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError("");
+
+    const expiresAt = endOfLocalDay(expiresOn);
+    if (Number.isNaN(expiresAt.getTime()) || expiresAt.getTime() <= Date.now()) {
+      setError("Choose an expiry date of today or later.");
+      return;
+    }
+
+    try {
+      await updateExpiry.mutateAsync({ id: campaign._id, expiresAt: expiresAt.toISOString() });
+      onClose();
+    } catch (err) {
+      setError(apiErrorMessage(err));
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">
+        <h2 className="text-lg font-bold text-thappa-navy">Campaign expiry</h2>
+        <p className="mb-4 text-sm text-gray-500">
+          {campaign.businessId?.name} — {campaign.headline}
+        </p>
+        <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+          <label className={labelClass}>
+            Expiry date
+            <Input type="date" required min={dateInputValue()} value={expiresOn} onChange={(e) => setExpiresOn(e.target.value)} />
+            <span className="text-xs font-normal text-gray-500">
+              The campaign ends at the end of this day and is removed from the mobile app.
+            </span>
+          </label>
+
+          {error && <p className="text-sm text-red-600">{error}</p>}
+
+          <div className="mt-2 flex justify-end gap-2">
+            <button type="button" onClick={onClose} className="rounded-lg px-4 py-2 text-sm text-gray-500 hover:bg-gray-100">
+              Cancel
+            </button>
+            <Button type="submit" disabled={updateExpiry.isPending}>
+              {updateExpiry.isPending ? "Saving…" : "Save expiry"}
             </Button>
           </div>
         </form>

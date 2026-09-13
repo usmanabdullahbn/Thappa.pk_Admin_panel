@@ -1,11 +1,15 @@
 import axios from "axios";
+import { clearSession, currentPortalRole, readSession, updateAccessToken } from "../auth/sessionStore";
 
 export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:4000/v1";
 
 export const apiClient = axios.create({ baseURL: API_BASE_URL });
 
+// Send the login for the portal this page belongs to (/admin or /business), so
+// a business sign-in in another tab can't replace the admin's token.
 apiClient.interceptors.request.use((config) => {
-  const token = localStorage.getItem("thappa_access_token");
+  const role = currentPortalRole();
+  const token = role ? readSession(role)?.accessToken : undefined;
   if (token) {
     config.headers = config.headers || {};
     config.headers.Authorization = `Bearer ${token}`;
@@ -18,18 +22,18 @@ apiClient.interceptors.response.use(
   (res) => res,
   async (error) => {
     const original = error.config;
-    if (error.response?.status === 401 && !original._retry) {
+    const role = currentPortalRole();
+    if (error.response?.status === 401 && !original._retry && role) {
       original._retry = true;
-      const refreshToken = localStorage.getItem("thappa_refresh_token");
+      const refreshToken = readSession(role)?.refreshToken;
       if (refreshToken) {
         try {
           const { data } = await axios.post(`${API_BASE_URL}/auth/refresh`, { refreshToken });
-          localStorage.setItem("thappa_access_token", data.accessToken);
+          updateAccessToken(role, data.accessToken);
           original.headers.Authorization = `Bearer ${data.accessToken}`;
           return apiClient(original);
         } catch {
-          localStorage.removeItem("thappa_access_token");
-          localStorage.removeItem("thappa_refresh_token");
+          clearSession(role);
           window.location.href = "/login";
         }
       }

@@ -10,7 +10,8 @@ const links = [
 ];
 
 export function BusinessLayout() {
-  const { user, logout } = useAuth();
+  const { sessions, logout } = useAuth();
+  const user = sessions.BUSINESS;
 
   return (
     <div className="flex min-h-screen">
@@ -33,7 +34,7 @@ export function BusinessLayout() {
           ))}
         </nav>
         <div className="p-3">
-          <button onClick={logout} className="w-full rounded-lg px-3 py-2 text-left text-sm text-white/70 hover:bg-white/10">
+          <button onClick={() => logout("BUSINESS")}className="w-full rounded-lg px-3 py-2 text-left text-sm text-white/70 hover:bg-white/10">
             Log out
           </button>
         </div>

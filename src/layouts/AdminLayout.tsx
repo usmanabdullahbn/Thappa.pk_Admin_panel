@@ -8,7 +8,8 @@ const links = [
 ];
 
 export function AdminLayout() {
-  const { user, logout } = useAuth();
+  const { sessions, logout } = useAuth();
+  const user = sessions.ADMIN;
 
   return (
     <div className="flex min-h-screen">
@@ -31,7 +32,7 @@ export function AdminLayout() {
           ))}
         </nav>
         <div className="p-3">
-          <button onClick={logout} className="w-full rounded-lg px-3 py-2 text-left text-sm text-white/70 hover:bg-white/10">
+          <button onClick={() => logout("ADMIN")}className="w-full rounded-lg px-3 py-2 text-left text-sm text-white/70 hover:bg-white/10">
             Log out
           </button>
         </div>

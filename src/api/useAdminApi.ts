@@ -49,6 +49,8 @@ export interface CreateCampaignPayload {
   description: string;
   stampsRequired: number;
   rewardDescription: string;
+  /** ISO timestamp; the campaign is removed from the mobile app after this moment. */
+  expiresAt: string;
 }
 
 export function useCreateCampaign() {
@@ -67,6 +69,17 @@ export function useUpdateCampaignStatus() {
   return useMutation({
     mutationFn: async ({ id, isActive }: { id: string; isActive: boolean }) => {
       const { data } = await apiClient.patch(`/admin/campaigns/${id}/status`, { isActive });
+      return data;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "campaigns"] }),
+  });
+}
+
+export function useUpdateCampaignExpiry() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, expiresAt }: { id: string; expiresAt: string }) => {
+      const { data } = await apiClient.patch(`/admin/campaigns/${id}/expiry`, { expiresAt });
       return data;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "campaigns"] }),

@@ -32,11 +32,38 @@ export function useCustomerDetail(customerId?: string) {
   });
 }
 
+export interface BusinessCampaign {
+  _id: string;
+  headline: string;
+  description: string;
+  stampsRequired: number;
+  rewardDescription: string;
+  expiresAt: string;
+}
+
+/** This business's campaigns that are live (switched on and not expired). */
+export function useActiveCampaigns() {
+  return useQuery({
+    queryKey: ["business", "campaigns"],
+    queryFn: async () => {
+      const { data } = await apiClient.get("/business/campaigns");
+      return data.data as BusinessCampaign[];
+    },
+  });
+}
+
 export function useGenerateQr() {
   return useMutation({
-    mutationFn: async (payload: { branchId: string; amountPaid?: number }) => {
+    mutationFn: async (payload: { campaignId: string; branchId: string; amountPaid?: number }) => {
       const { data } = await apiClient.post("/business/qr/generate", payload);
-      return data as { qrToken: string; qrImageBase64: string; expiresAt: string; nonce: string };
+      return data as {
+        qrToken: string;
+        qrImageBase64: string;
+        link: string;
+        expiresAt: string;
+        nonce: string;
+        campaign: Pick<BusinessCampaign, "_id" | "headline" | "stampsRequired" | "rewardDescription">;
+      };
     },
   });
 }
