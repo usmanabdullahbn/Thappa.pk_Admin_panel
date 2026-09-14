@@ -10,7 +10,6 @@ import { DashboardHomePage } from "./features/business/DashboardHomePage";
 import { GenerateQRPage } from "./features/business/GenerateQRPage";
 import { CustomersPage } from "./features/business/CustomersPage";
 import { RedeemCodeEntryPage } from "./features/business/RedeemCodeEntryPage";
-import { LoyaltyRuleSettingsPage } from "./features/business/LoyaltyRuleSettingsPage";
 
 export const router = createBrowserRouter([
   { path: "/", element: <Navigate to="/login" replace /> },
@@ -42,7 +41,6 @@ export const router = createBrowserRouter([
       { path: "generate-qr", element: <GenerateQRPage /> },
       { path: "customers", element: <CustomersPage /> },
       { path: "redeem", element: <RedeemCodeEntryPage /> },
-      { path: "settings", element: <LoyaltyRuleSettingsPage /> },
     ],
   },
   { path: "*", element: <Navigate to="/login" replace /> },

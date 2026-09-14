@@ -78,7 +78,7 @@ export function GenerateQRPage() {
       return;
     }
     if (!activeBranchId) {
-      setError("Add a branch first under Loyalty Settings.");
+      setError("No branch found for this business. Contact support to add one.");
       return;
     }
     try {

@@ -6,7 +6,6 @@ const links = [
   { to: "/business/generate-qr", label: "Generate Stamp QR" },
   { to: "/business/customers", label: "Customers" },
   { to: "/business/redeem", label: "Redeem Code" },
-  { to: "/business/settings", label: "Loyalty Settings" },
 ];
 
 export function BusinessLayout() {
